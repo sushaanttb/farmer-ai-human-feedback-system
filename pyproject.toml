@@ -1,0 +1,18 @@
+[project]
+name = "farmer-ai-human-feedback-system"
+version = "0.1.0"
+description = "Farmer AI Human feedback system -- backend (FastAPI) managed with uv; frontend is a separate React app"
+readme = "README.md"
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "pandas",
+    "openpyxl",
+    "sqlmodel",
+]
+
+[tool.uv]
+# Let uv manage the project environment and lockfile automatically
+managed = true
