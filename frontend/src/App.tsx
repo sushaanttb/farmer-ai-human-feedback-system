@@ -434,23 +434,30 @@ export default function App() {
                           <td style={{ padding: 12 }}>
                             <button className="btn" style={{ padding: '4px 8px' }}>{isExpanded ? '▾' : '▸'}</button>
                           </td>
-                          {/* hashedid moved to second column */}
+                          {/* hashedid moved to second column - show count inline */}
                           <td style={{ padding: 12 }}>
                             <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, whiteSpace: 'nowrap' }}>
                               <span style={{ fontWeight: 600 }}>{group.hashedid}</span>
                               <span style={{ fontSize: 12, color: '#6b7280' }}>({group.items.length} conversations)</span>
                             </div>
                           </td>
-                          {/* show minimal for sent_date and keep other columns empty */}
-                          <td style={{ padding: 12 }} />
-                          <td style={{ padding: 12 }} />
-                          <td style={{ padding: 12 }} />
-                          <td style={{ padding: 12 }} />
-                          <td style={{ padding: 12 }} />
-                          <td style={{ padding: 12 }} />
-                          <td style={{ padding: 12 }} />
-                          <td style={{ padding: 12 }} />
-                          <td style={{ padding: 12 }} />
+                          {/* show sent date in muted small text */}
+                          <td style={{ padding: 12 }}>
+                            <span style={{ fontSize: 12, color: '#6b7280' }}>{first.sent_date}</span>
+                          </td>
+                          {/* show a short muted preview of the first user message */}
+                          <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <span style={{ fontSize: 12, color: '#6b7280' }} title={first.user_message_en}>{truncate(first.user_message_en, 120)}</span>
+                          </td>
+                         <td style={{ padding: 12 }} />
+                         <td style={{ padding: 12 }} />
+                         <td style={{ padding: 12 }} />
+                         <td style={{ padding: 12 }} />
+                         <td style={{ padding: 12 }} />
+                         <td style={{ padding: 12 }} />
+                         <td style={{ padding: 12 }} />
+                         <td style={{ padding: 12 }} />
+                         <td style={{ padding: 12 }} />
                         </tr>
                         {isExpanded && group.items.map((c: any) => {
                           const rowId = c.index ?? c.id
