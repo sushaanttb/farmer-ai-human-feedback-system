@@ -30,7 +30,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState('sent_date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(5)
+  const [pageSize, setPageSize] = useState(10)
   const [notification, setNotification] = useState<string | null>(null)
   const [view, setView] = useState<'admin' | 'insights'>('admin')
   // track expanded/collapsed state for grouped hashedid entries
@@ -311,9 +311,9 @@ export default function App() {
           <div>
             <label>Page size: </label>
             <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
-              <option value={5}>5</option>
               <option value={10}>10</option>
               <option value={20}>20</option>
+              <option value={50}>50</option>
             </select>
           </div>
           <div>
@@ -449,6 +449,7 @@ export default function App() {
                           <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             <span style={{ fontSize: 12, color: '#6b7280' }} title={first.user_message_en}>{truncate(first.user_message_en, 120)}</span>
                           </td>
+                         <td style={{ padding: 12 }} />
                          <td style={{ padding: 12 }} />
                          <td style={{ padding: 12 }} />
                          <td style={{ padding: 12 }} />
