@@ -33,6 +33,8 @@ export default function App() {
   const [pageSize, setPageSize] = useState(5)
   const [notification, setNotification] = useState<string | null>(null)
   const [view, setView] = useState<'admin' | 'insights'>('admin')
+  // track expanded/collapsed state for grouped hashedid entries
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
   const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
@@ -45,6 +47,10 @@ export default function App() {
     const c = conversations.find(r => (r.index ?? r.id) === selectedIndex)
     setExpertAnswer(c?.expert_answer ?? '')
   }, [selectedIndex, conversations])
+
+  function toggleGroup(h: string) {
+    setExpandedGroups(prev => ({ ...prev, [h]: !prev[h] }))
+  }
 
   // helper to render lean previews in the table
   const truncate = (v: any, n = 50) => {
@@ -169,8 +175,47 @@ export default function App() {
     return aVal.localeCompare(bVal) * modifier
   })
 
-  const totalPages = Math.max(1, Math.ceil(sortedConversations.length / pageSize))
-  const pageRows = sortedConversations.slice((page - 1) * pageSize, page * pageSize)
+  // Build grouped display list: for hashedid values that appear more than once, create a group entry.
+  // Single conversations remain as individual entries so their UI/UX is unchanged.
+  type DisplayEntry = { type: 'group', hashedid: string, items: any[] } | { type: 'row', item: any }
+  const groupedDisplayList: DisplayEntry[] = (() => {
+    const byHash: Record<string, any[]> = {}
+    const singles: any[] = []
+    for (const r of sortedConversations) {
+      const h = String(r.hashedid ?? '')
+      if (h) {
+        byHash[h] = byHash[h] ?? []
+        byHash[h].push(r)
+      } else {
+        singles.push(r)
+      }
+    }
+    const out: DisplayEntry[] = []
+    // add grouped hashedid entries (only when there are multiple items), otherwise push as single rows
+    const processedHashes = new Set<string>()
+    for (const r of sortedConversations) {
+      const h = String(r.hashedid ?? '')
+      if (!h) {
+        out.push({ type: 'row', item: r })
+        continue
+      }
+      if (processedHashes.has(h)) continue
+      const groupItems = byHash[h] ?? []
+      if (groupItems.length > 1) {
+        out.push({ type: 'group', hashedid: h, items: groupItems })
+      } else if (groupItems.length === 1) {
+        out.push({ type: 'row', item: groupItems[0] })
+      }
+      processedHashes.add(h)
+    }
+    return out
+  })()
+
+  const totalPages = Math.max(1, Math.ceil(groupedDisplayList.length / pageSize))
+  const pageRows = groupedDisplayList.slice((page - 1) * pageSize, page * pageSize)
+
+  // const totalPages = Math.max(1, Math.ceil(sortedConversations.length / pageSize))
+  // const pageRows = sortedConversations.slice((page - 1) * pageSize, page * pageSize)
 
   return (
     <div style={{ padding: 24 }}>
@@ -297,8 +342,9 @@ export default function App() {
                   <tr>
                     {[
                       { key: 'select', label: 'Select' },
-                      { key: 'sent_date', label: 'Sent Date' },
+                      // moved hashedid next to select to be the left-most data column
                       { key: 'hashedid', label: 'HashID' },
+                      { key: 'sent_date', label: 'Sent Date' },
                       { key: 'user_message_en', label: 'User Message' },
                       { key: 'assistant_message_en', label: 'Assistant Message' },
                       { key: 'bot', label: 'Bot' },
@@ -329,7 +375,7 @@ export default function App() {
                   </tr>
                   <tr>
                     <th />
-                    {['sent_date','hashedid','user_message_en','assistant_message_en','bot','subject','crop','feedback_neg','language','expert_answer','status'].map((col) => (
+                    {['hashedid','sent_date','user_message_en','assistant_message_en','bot','subject','crop','feedback_neg','language','expert_answer','status'].map((col) => (
                       <th key={`filter-${col}`} style={{ padding: 6 }}>
                         <input
                           value={columnFilters[col] ?? ''}
@@ -342,62 +388,130 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pageRows.map((c) => {
-                    const rowId = c.index ?? c.id
+                  {pageRows.map((entry) => {
+                    if (entry.type === 'row') {
+                      const c = entry.item
+                      const rowId = c.index ?? c.id
+                      return (
+                        <tr
+                          key={`row-${rowId}`}
+                          style={{ borderBottom: '1px solid #eee', background: selectedIndex === rowId ? '#eef2ff' : undefined, cursor: 'pointer' }}
+                          onClick={() => setSelectedIndex(rowId)}
+                        >
+                          <td style={{ padding: 12 }} onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="radio"
+                              name="selected"
+                              value={rowId}
+                              checked={selectedIndex === rowId}
+                              onChange={(e) => setSelectedIndex(Number((e.target as HTMLInputElement).value))}
+                            />
+                          </td>
+                          {/* moved hashedid to be the first data column */}
+                          <td style={{ padding: 12 }}>{String(c.hashedid ?? '')}</td>
+                          <td style={{ padding: 12 }}>{c.sent_date}</td>
+                          <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'normal' }} title={c.user_message_en}>{truncate(c.user_message_en, 50)}</td>
+                          <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'normal' }} title={c.assistant_message_en}>{truncate(c.assistant_message_en, 50)}</td>
+                          <td style={{ padding: 12 }}>{c.bot}</td>
+                          <td style={{ padding: 12 }}>{c.subject}</td>
+                          <td style={{ padding: 12 }}>{c.crop}</td>
+                          <td style={{ padding: 12 }}>{String(c.feedback_neg ?? '')}</td>
+                          <td style={{ padding: 12 }}>{String(c.language ?? '')}</td>
+                          <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'normal' }} title={c.expert_answer}>{truncate(c.expert_answer, 50)}</td>
+                          <td style={{ padding: 12 }}>{c.status ?? 'Open'}</td>
+                        </tr>
+                      )
+                    }
+
+                    // group entry
+                    const group = entry
+                    const first = group.items[0]
+                    const groupKey = `group-${group.hashedid}`
+                    const isExpanded = !!expandedGroups[group.hashedid]
                     return (
-                      <tr
-                        key={rowId}
-                        style={{ borderBottom: '1px solid #eee', background: selectedIndex === rowId ? '#eef2ff' : undefined, cursor: 'pointer' }}
-                        onClick={() => setSelectedIndex(rowId)}
-                      >
-                        <td style={{ padding: 12 }} onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="radio"
-                            name="selected"
-                            value={rowId}
-                            checked={selectedIndex === rowId}
-                            onChange={(e) => setSelectedIndex(Number((e.target as HTMLInputElement).value))}
-                          />
-                        </td>
-                        <td style={{ padding: 12 }}>{c.sent_date}</td>
-                        <td style={{ padding: 12 }}>{String(c.hashedid ?? '')}</td>
-                        <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'normal' }} title={c.user_message_en}>{truncate(c.user_message_en, 50)}</td>
-                        <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'normal' }} title={c.assistant_message_en}>{truncate(c.assistant_message_en, 50)}</td>
-                        <td style={{ padding: 12 }}>{c.bot}</td>
-                        <td style={{ padding: 12 }}>{c.subject}</td>
-                        <td style={{ padding: 12 }}>{c.crop}</td>
-                        <td style={{ padding: 12 }}>{String(c.feedback_neg ?? '')}</td>
-                        <td style={{ padding: 12 }}>{String(c.language ?? '')}</td>
-                        <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'normal' }} title={c.expert_answer}>{truncate(c.expert_answer, 50)}</td>
-                        <td style={{ padding: 12 }}>{c.status ?? 'Open'}</td>
-                      </tr>
+                      <React.Fragment key={groupKey}>
+                        <tr style={{ borderBottom: '1px solid #eee', background: '#f9fafb' }} onClick={(e) => { e.stopPropagation(); toggleGroup(group.hashedid) }}>
+                          <td style={{ padding: 12 }}>
+                            <button className="btn" style={{ padding: '4px 8px' }}>{isExpanded ? '▾' : '▸'}</button>
+                          </td>
+                          {/* hashedid moved to second column */}
+                          <td style={{ padding: 12 }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, whiteSpace: 'nowrap' }}>
+                              <span style={{ fontWeight: 600 }}>{group.hashedid}</span>
+                              <span style={{ fontSize: 12, color: '#6b7280' }}>({group.items.length} conversations)</span>
+                            </div>
+                          </td>
+                          {/* show minimal for sent_date and keep other columns empty */}
+                          <td style={{ padding: 12 }} />
+                          <td style={{ padding: 12 }} />
+                          <td style={{ padding: 12 }} />
+                          <td style={{ padding: 12 }} />
+                          <td style={{ padding: 12 }} />
+                          <td style={{ padding: 12 }} />
+                          <td style={{ padding: 12 }} />
+                          <td style={{ padding: 12 }} />
+                          <td style={{ padding: 12 }} />
+                        </tr>
+                        {isExpanded && group.items.map((c: any) => {
+                          const rowId = c.index ?? c.id
+                          return (
+                            <tr
+                              key={`row-${rowId}`}
+                              style={{ borderBottom: '1px solid #eee', background: selectedIndex === rowId ? '#eef2ff' : undefined, cursor: 'pointer' }}
+                              onClick={() => setSelectedIndex(rowId)}
+                            >
+                              <td style={{ padding: 12, paddingLeft: 28 }} onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="radio"
+                                  name="selected"
+                                  value={rowId}
+                                  checked={selectedIndex === rowId}
+                                  onChange={(e) => setSelectedIndex(Number((e.target as HTMLInputElement).value))}
+                                />
+                              </td>
+                              <td style={{ padding: 12 }}>{String(c.hashedid ?? '')}</td>
+                              <td style={{ padding: 12 }}>{c.sent_date}</td>
+                              <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'normal' }} title={c.user_message_en}>{truncate(c.user_message_en, 50)}</td>
+                              <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'normal' }} title={c.assistant_message_en}>{truncate(c.assistant_message_en, 50)}</td>
+                              <td style={{ padding: 12 }}>{c.bot}</td>
+                              <td style={{ padding: 12 }}>{c.subject}</td>
+                              <td style={{ padding: 12 }}>{c.crop}</td>
+                              <td style={{ padding: 12 }}>{String(c.feedback_neg ?? '')}</td>
+                              <td style={{ padding: 12 }}>{String(c.language ?? '')}</td>
+                              <td style={{ padding: 12, maxWidth: 400, whiteSpace: 'normal' }} title={c.expert_answer}>{truncate(c.expert_answer, 50)}</td>
+                              <td style={{ padding: 12 }}>{c.status ?? 'Open'}</td>
+                            </tr>
+                          )
+                        })}
+                      </React.Fragment>
                     )
                   })}
-                  {pageRows.length === 0 && (
-                    <tr>
-                      <td colSpan={12} style={{ padding: 20, textAlign: 'center', color: '#6b7280' }}>{isFetching ? 'Loading...' : 'No conversations'}</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                   {pageRows.length === 0 && (
+                     <tr>
+                       <td colSpan={12} style={{ padding: 20, textAlign: 'center', color: '#6b7280' }}>{isFetching ? 'Loading...' : 'No conversations'}</td>
+                     </tr>
+                   )}
+                 </tbody>
+               </table>
+             </div>
 
-            {/* pagination */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-              <div>
-                <button className="btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>Prev</button>
-                <span style={{ margin: '0 8px' }}>Page {page} / {totalPages}</span>
-                <button className="btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Next</button>
-              </div>
-              <div>
-                <small>{sortedConversations.length} items</small>
-              </div>
-            </div>
-          </div>
+             {/* pagination */}
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+               <div>
+                 <button className="btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>Prev</button>
+                 <span style={{ margin: '0 8px' }}>Page {page} / {totalPages}</span>
+                 <button className="btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Next</button>
+               </div>
+               <div>
+-                <small>{sortedConversations.length} items</small>
++                <small>{groupedDisplayList.length} items</small>
+               </div>
+             </div>
+           </div>
 
-          {/* Conversation details / expert answer panel */}
-          <div style={{ width: 420, minWidth: 320 }}>
-            <div style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff' }}>
+           {/* Conversation details / expert answer panel */}
+           <div style={{ width: 420, minWidth: 320 }}>
+             <div style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff' }}>
               <h3>Conversation Info</h3>
               {selectedIndex === null ? (
                 <div style={{ color: '#6b7280' }}>Select a conversation to view details and provide an expert answer.</div>
